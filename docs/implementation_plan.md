@@ -27,27 +27,18 @@ A personal finance tracking system designed to consolidate transactions from mul
   - Example: Bank A uses "Date, Desc, Amt", Bank B uses "Posted Date, Merchant, Value".
   - The system will detect headers or let you pick a mapping template on upload.
 
-#### 2. Data Model (Schema Idea)
-- **Member** (Dynamic Owners):
-    - `id`, `name` (e.g. Eshwar, Deepshree, Joint) - *Seedable, extendable via DB*
-- **Account**:
-    - `id`, `name`, `currency` (GBP/INR/SGD), `member_id` (Default owner)
-- **ImportJob** (Traceability):
-    - `id`, `filename`, `status` (Processing, Completed), `raw_file_path`, `created_at`
+#### 2. Data Model (Finalized Schema)
+- **Member**: `id`, `name`, `nickname`.
+- **Account**: `bankName`, `accountNumber` (masked), `type` (Current/Savings), `currency`.
 - **Transaction**:
-    - `id`, `import_job_id`, `raw_data_json` (Full row data from CSV)
-    - `amount`, `currency`, `amount_gbp`
-    - `status` (Enum: "Draft", "Posted")
-    - `category_id` (Default), `type` (Expense, Transfer/Settlement), `assigned_to_member_id` (Default)
-    - `is_split` (Boolean flag)
-- **TransactionSplit** (Granular Allocation):
-    - `id`, `transaction_id`
-    - `amount`, `amount_gbp`
-    - `category_id`, `assigned_to_member_id`
-- **Category**:
-    - `id`, `name`, `default_type` (Living/Personal)
-- **ExtractionPattern**:
-    - `id`, `account_id`, `config` (Header row, column mapping)
+    - `date`, `description`, `notes`
+    - `amount` (Decimal), `amountGbp` (Decimal)
+    - `status` (Enum: DRAFT, POSTED)
+    - `category_id` (Tagging)
+    - `assignedToMemberId` (Owner of expense)
+    - `contentHash` (Prevent duplicates)
+- **TransactionSplit**: Allows splitting cost between members.
+- **ExtractionPattern**: JSON config for parsing CSVs.
 
 #### 3. Workflow (Asynchronous Triage)
 1. **Upload**: 
@@ -80,15 +71,12 @@ A personal finance tracking system designed to consolidate transactions from mul
     - "Who Owes Who" graph.
     - Options to "Ignore/Hide" debts prior to a certain date (Checkpointing) if the math drifts over years, but primary truth is the ledger.
 
-#### 5. Categorization Logic (Rules Engine)
+#### 6. Categorization Logic (Rules Engine)
 - **Rule Design**:
     - `pattern` (Regex/Keyword), `category_id`, `priority` (to handle conflicts).
+    - Stored in `ExtractionPattern.config` (Json).
     - Auto-run on upload.
-- **Manual Override**: UI to correct mis-categorized items, which optionally creates a new rule.
-
-#### 6. Documentation & AI Context
-- **Automated Docs**: TypeDoc for code documentation, auto-generated README updates.
-- **AI Context Files**: `.cursorrules` / `agent.md` to help future AI assistants understand the project structure and conventions.
+- **Manual Override**: UI to correct mis-categorized items.
 
 ## Testing Strategy & Validation
 > [!NOTE]
@@ -103,35 +91,15 @@ A personal finance tracking system designed to consolidate transactions from mul
 - **Data Validation (Historical Data)**:
   - We will use your 4 years of existing CSVs as the "Golden Dataset".
   - **Regression Testing**: Ensure new rules don't break old categorizations.
-  - **Performance**: Verify the dashboard remains snappy with 4+ years of data.
-
-## Release & Deployment Strategy
-- **Deployment Target**:
-  - **Primary**: Native Node.js process on your existing **Linux VM** (Minimizes RAM overhead).
-  - **Process Management**: We will use `systemd` (or `pm2`) to keep the app running and restart it on boot.
-- **Release Management**:
-  1. **Development**: You work on `main` branch on your Mac.
-  2. **Release**: Tag a version on GitHub.
-  3. **Deploy**:
-     - SSH into your Linux VM.
-     - `git pull` the latest tag.
-     - `npm install && npm run build`.
-     - Restart the service (`sudo systemctl restart transaction-app`).
-- **Data Persistence**:
-  - The SQLite database file (`.db`) and `archive/` folder are just files on your VM disk. Easy to backup with `rsync` or any backup tool.
-
-- **Scripts**:
-  - `setup.sh`: Automated script to install dependencies (Node.js, PM2), clone repo, and setup `.env` on a fresh machine (Mac or Linux).
-  - `update.sh`: Script to pull latest git tag, run migrations, rebuild, and restart the service.
 
 ## Implementation Steps
-1. **Setup**: Initialize Next.js + SQLite.
+1. **Setup**: Initialize Next.js + SQLite (Completed).
 2. **Infrastructure**:
-   - create `setup.sh` (Dev/Prod setup).
-   - create `update.sh` (One-click update).
-   - create `systemd` service file.
-3. **Database**: Define Schema (Prisma).
-4. **Ingestion**: Build the flexible CSV parser.
-5. **Testing**: Create test suite using a sample of your anonymized historical data.
-6. **Categorization**: Build the Rules Engine.
-7. **Dashboard**: Build the visualization reporting view.
+   - create `setup.sh` / `update.sh` (Completed).
+3. **Database**: Define Schema (Prisma) (Completed).
+4. **Seed Data**: Create `prisma/seed.ts` (Next Step).
+5. **Ingestion**: Build the flexible CSV parser.
+6. **Testing**: Create test suite using a sample of your anonymized historical data.
+7. **Categorization**: Build the Rules Engine.
+8. **Dashboard**: Build the visualization reporting view.
+

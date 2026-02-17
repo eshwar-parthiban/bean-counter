@@ -5,13 +5,13 @@
     - [ ] Define data model (Schema)
     - [ ] UI/UX Mockups
 - [ ] Environment Setup
-    - [ ] Initialize Next.js project
-    - [ ] Setup Database (SQLite + Prisma/Drizzle)
-    - [ ] Initialize Git & GitHub Repository
-    - [ ] Create `agent.md` / AI Context files
-    - [ ] Create Systemd Service File
-    - [ ] Create `setup.sh` (Fresh Install Script)
-    - [ ] Create `update.sh` (Update Script)
+    - [x] Initialize Next.js project
+    - [x] Setup Database (SQLite + Prisma/Drizzle)
+    - [x] Initialize Git & GitHub Repository
+    - [x] Create `agent.md` / AI Context files
+    - [x] Create Systemd Service File
+    - [x] Create `setup.sh` (Fresh Install Script)
+    - [x] Create `update.sh` (Update Script)
 - [ ] Core Implementation
     - [ ] Bank Account & Category Management UI
     - [ ] Extraction Pattern Builder UI (Header skipping, Mapping)

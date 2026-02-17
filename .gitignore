@@ -48,3 +48,6 @@ next-env.d.ts
 
 # Compiled Seed Script
 /prisma/seed.js
+
+# Application Data
+/data/

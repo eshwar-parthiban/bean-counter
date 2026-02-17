@@ -1,65 +1,83 @@
-import Image from "next/image";
+import Link from "next/link";
+import { ArrowRight, Wallet, PieChart, TrendingUp, Plus } from "lucide-react";
 
-export default function Home() {
+export default function HomePage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-[calc(100vh-64px)] bg-zinc-50 dark:bg-zinc-950">
+      {/* Hero Section */}
+      <section className="relative overflow-hidden pt-16 pb-20 md:pt-24 md:pb-32">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-full pointer-events-none">
+          <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-indigo-500/10 rounded-full blur-[120px]" />
+          <div className="absolute bottom-[10%] left-[-10%] w-[500px] h-[500px] bg-purple-500/10 rounded-full blur-[120px]" />
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        <div className="max-w-7xl mx-auto px-4 relative z-10">
+          <div className="max-w-3xl">
+            <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 leading-[1.1]">
+              Track your wealth, <br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">
+                one bean at a time.
+              </span>
+            </h1>
+            <p className="mt-6 text-xl text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-2xl">
+              An intelligent, multi-currency personal finance tracker designed for modern nomads and joint households. Automatically categorize, split, and analyze your transactions.
+            </p>
+
+            <div className="mt-10 flex flex-wrap gap-4">
+              <Link
+                href="/transactions/new"
+                className="px-8 py-4 rounded-full bg-zinc-900 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-900 font-semibold hover:opacity-90 transition-all flex items-center gap-2 group shadow-xl shadow-zinc-200 dark:shadow-none"
+              >
+                Import Transactions
+                <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+              </Link>
+              <Link
+                href="/management"
+                className="px-8 py-4 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-50 font-semibold hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all"
+              >
+                Setup Accounts
+              </Link>
+            </div>
+          </div>
         </div>
-      </main>
+      </section>
+
+      {/* Quick Stats Grid */}
+      <section className="max-w-7xl mx-auto px-4 pb-24">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="p-8 rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-sm">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center text-indigo-600 mb-6">
+              <Wallet size={24} />
+            </div>
+            <h3 className="text-zinc-500 dark:text-zinc-400 font-medium">Total Balance</h3>
+            <p className="text-3xl font-bold mt-2 text-zinc-900 dark:text-zinc-50 font-mono">£12,450.80</p>
+            <div className="mt-4 flex items-center gap-2 text-sm text-emerald-600 font-medium">
+              <TrendingUp size={16} />
+              <span>+2.4% this month</span>
+            </div>
+          </div>
+
+          <div className="p-8 rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-sm text-zinc-400 border-dashed">
+            <div className="w-12 h-12 rounded-2xl bg-zinc-50 dark:bg-zinc-800/50 flex items-center justify-center text-zinc-400 mb-6">
+              <PieChart size={24} />
+            </div>
+            <h3 className="font-medium">Monthly Spending</h3>
+            <p className="text-3xl font-bold mt-2 italic opacity-50">Coming soon</p>
+            <p className="mt-4 text-sm">Visualize your expense distribution across categories.</p>
+          </div>
+
+          <Link
+            href="/transactions/new"
+            className="p-8 rounded-3xl bg-indigo-600 hover:bg-indigo-700 transition-colors flex flex-col items-center justify-center text-white group"
+          >
+            <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+              <Plus size={32} />
+            </div>
+            <h3 className="text-xl font-bold">New Import</h3>
+            <p className="text-indigo-100 mt-2 text-center">Process CSV statements and sync your data</p>
+          </Link>
+        </div>
+      </section>
     </div>
   );
 }

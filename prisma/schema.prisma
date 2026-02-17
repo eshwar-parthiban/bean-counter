@@ -8,30 +8,30 @@ datasource db {
 }
 
 model Member {
-  id                String             @id @default(cuid())
-  name              String
-  nickname          String?
-  accounts          Account[]
-  transactions      Transaction[]      @relation("AssignedTo")
-  splits            TransactionSplit[]
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  id           String             @id @default(cuid())
+  name         String
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  nickname     String?
+  accounts     Account[]
+  transactions Transaction[]      @relation("AssignedTo")
+  splits       TransactionSplit[]
 }
 
 model Account {
   id                 String              @id @default(cuid())
-  name               String              // Internal ID name or just duplicate of bankName/nickname? Keeping generic name.
+  name               String
   bankName           String
   accountNumber      String
-  nickname           String?             // Defaults to "${bankName} - ${member.name}" in app logic
+  nickname           String?
   currency           Currency
   type               AccountType         @default(CURRENT)
   memberId           String
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
   member             Member              @relation(fields: [memberId], references: [id])
   extractionPatterns ExtractionPattern[]
   importJobs         ImportJob[]
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
 }
 
 model ImportJob {
@@ -39,11 +39,11 @@ model ImportJob {
   filename     String
   status       ImportStatus  @default(PROCESSING)
   accountId    String
-  account      Account       @relation(fields: [accountId], references: [id])
   rawFilePath  String
-  transactions Transaction[]
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
+  account      Account       @relation(fields: [accountId], references: [id])
+  transactions Transaction[]
 }
 
 model Transaction {
@@ -51,7 +51,6 @@ model Transaction {
   date               DateTime
   description        String
   importJobId        String
-  importJob          ImportJob          @relation(fields: [importJobId], references: [id])
   rawData            Json
   contentHash        String             @unique
   amount             Decimal
@@ -60,47 +59,46 @@ model Transaction {
   notes              String?
   status             TransactionStatus  @default(DRAFT)
   categoryId         String?
-  category           Category?          @relation(fields: [categoryId], references: [id])
-
   assignedToMemberId String?
-  assignedToMember   Member?            @relation("AssignedTo", fields: [assignedToMemberId], references: [id])
   isSplit            Boolean            @default(false)
-  splits             TransactionSplit[]
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
+  assignedToMember   Member?            @relation("AssignedTo", fields: [assignedToMemberId], references: [id])
+  category           Category?          @relation(fields: [categoryId], references: [id])
+  importJob          ImportJob          @relation(fields: [importJobId], references: [id])
+  splits             TransactionSplit[]
 }
 
 model TransactionSplit {
   id                 String      @id @default(cuid())
   transactionId      String
-  transaction        Transaction @relation(fields: [transactionId], references: [id])
   amount             Decimal
   amountGbp          Decimal
   categoryId         String
-  category           Category    @relation(fields: [categoryId], references: [id])
   assignedToMemberId String
-  assignedToMember   Member      @relation(fields: [assignedToMemberId], references: [id])
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
+  assignedToMember   Member      @relation(fields: [assignedToMemberId], references: [id])
+  category           Category    @relation(fields: [categoryId], references: [id])
+  transaction        Transaction @relation(fields: [transactionId], references: [id])
 }
 
 model Category {
   id           String             @id @default(cuid())
   name         String
-  transactions Transaction[]
-  splits       TransactionSplit[]
-
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
+  transactions Transaction[]
+  splits       TransactionSplit[]
 }
 
 model ExtractionPattern {
   id        String   @id @default(cuid())
   accountId String
-  account   Account  @relation(fields: [accountId], references: [id])
-  config    Json     // JSON mapping rules
+  config    Json
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  account   Account  @relation(fields: [accountId], references: [id])
 }
 
 enum AccountType {
@@ -126,5 +124,3 @@ enum TransactionStatus {
   DRAFT
   POSTED
 }
-
-

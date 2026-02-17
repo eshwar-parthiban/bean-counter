@@ -1,0 +1,13 @@
+[Unit]
+Description=Bean Counter Finance Tracker
+After=network.target
+
+[Service]
+User=eshwar.parthiban
+WorkingDirectory=/Users/eshwar.parthiban/Projects/GH/bean-counter
+ExecStart=/usr/local/bin/npm start
+Restart=always
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

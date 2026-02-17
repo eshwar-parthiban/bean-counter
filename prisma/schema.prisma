@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
@@ -75,6 +76,8 @@ model TransactionSplit {
   transaction        Transaction @relation(fields: [transactionId], references: [id])
   amount             Decimal
   amountGbp          Decimal
+  categoryId         String
+  category           Category    @relation(fields: [categoryId], references: [id])
   assignedToMemberId String
   assignedToMember   Member      @relation(fields: [assignedToMemberId], references: [id])
   createdAt          DateTime    @default(now())
@@ -85,6 +88,7 @@ model Category {
   id           String             @id @default(cuid())
   name         String
   transactions Transaction[]
+  splits       TransactionSplit[]
 
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt

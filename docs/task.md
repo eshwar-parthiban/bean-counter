@@ -1,0 +1,27 @@
+# Tasks: Bean Counter (Private Finance Tracker)
+
+- [/] Architecture & Design
+    - [/] Propose architecture and tech stack
+    - [ ] Define data model (Schema)
+    - [ ] UI/UX Mockups
+- [ ] Environment Setup
+    - [ ] Initialize Next.js project
+    - [ ] Setup Database (SQLite + Prisma/Drizzle)
+    - [ ] Initialize Git & GitHub Repository
+    - [ ] Create `agent.md` / AI Context files
+    - [ ] Create Systemd Service File
+    - [ ] Create `setup.sh` (Fresh Install Script)
+    - [ ] Create `update.sh` (Update Script)
+- [ ] Core Implementation
+    - [ ] Bank Account & Category Management UI
+    - [ ] Extraction Pattern Builder UI (Header skipping, Mapping)
+    - [ ] File Archiving & Raw Data Storage
+    - [ ] Multi-Currency Support (GBP/INR/SGD)
+    - [ ] Transaction Categorization Logic (Rules Engine)
+    - [ ] Settlement Logic & Debt Simplification
+    - [ ] Reporting Dashboard (Spending + Who Owes Who)
+- [ ] Verification & Testing
+    - [ ] Setup Jest/Vitest
+    - [ ] Import Legacy Database (for validation)
+    - [ ] Run categorization regression tests
+    - [ ] Performance testing with full 4-year dataset

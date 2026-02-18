@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Settings, Home, Wallet, PieChart } from "lucide-react";
+import { Settings, Home, Wallet, PieChart, Upload } from "lucide-react";
 
 export function Navbar() {
     return (
@@ -29,6 +29,13 @@ export function Navbar() {
                         >
                             <Wallet size={18} />
                             <span>Transactions</span>
+                        </Link>
+                        <Link
+                            href="/transactions/new"
+                            className="text-zinc-600 hover:text-indigo-600 dark:text-zinc-400 dark:hover:text-white transition-colors flex items-center gap-2"
+                        >
+                            <Upload size={18} />
+                            <span>Import</span>
                         </Link>
                         <Link
                             href="/reports"

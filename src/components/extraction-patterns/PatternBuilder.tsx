@@ -4,7 +4,7 @@ import React, { useState, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Papa from "papaparse";
 import { Card, Button, Input, Label, Select, cn } from "@/components/ui";
-import { Upload, Table as TableIcon, Save, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Upload, Table as TableIcon, Save, ArrowRight, CheckCircle2, AlertCircle, FileText, ChevronRight, X } from "lucide-react";
 import { createExtractionPattern } from "@/lib/actions/extraction-patterns";
 import { useRouter } from "next/navigation";
 
@@ -12,12 +12,24 @@ interface PatternBuilderProps {
     accounts: { id: string; name: string; bankName: string }[];
 }
 
+type Step = "UPLOAD" | "MARKING" | "MAPPING";
+
 export default function PatternBuilder({ accounts }: PatternBuilderProps) {
     const router = useRouter();
+    const [currentStep, setCurrentStep] = useState<Step>("UPLOAD");
     const [selectedAccountId, setSelectedAccountId] = useState("");
-    const [csvData, setCsvData] = useState<any[]>([]);
-    const [headers, setHeaders] = useState<string[]>([]);
-    const [skipHeaderLines, setSkipHeaderLines] = useState(0);
+
+    // File State
+    const [file, setFile] = useState<File | null>(null);
+    const [rawRows, setRawRows] = useState<string[][]>([]);
+    const [parseError, setParseError] = useState<string | null>(null);
+
+    // Marking State
+    const [ignoredRowIndices, setIgnoredRowIndices] = useState<Set<number>>(new Set());
+    const [headerRowIndex, setHeaderRowIndex] = useState<number | null>(null);
+    const [dataStartRowIndex, setDataStartRowIndex] = useState<number | null>(null);
+
+    // Mapping State
     const [mapping, setMapping] = useState({
         date: "",
         description: "",
@@ -25,47 +37,120 @@ export default function PatternBuilder({ accounts }: PatternBuilderProps) {
     });
     const [isSaving, setIsSaving] = useState(false);
 
+    // ----------------------------------------------------------------------
+    // STEP 1: UPLOAD HANDLERS
+    // ----------------------------------------------------------------------
     const onFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            Papa.parse(file, {
+        const uploadedFile = e.target.files?.[0];
+        if (uploadedFile) {
+            // Validate type
+            if (!uploadedFile.name.endsWith('.csv')) {
+                setParseError("Please upload a valid CSV file.");
+                return;
+            }
+
+            setFile(uploadedFile);
+            setParseError(null);
+
+            Papa.parse(uploadedFile, {
                 header: false,
-                skipEmptyLines: true,
+                skipEmptyLines: false, // We want to see empty lines to mark them if needed
+                preview: 20, // Only load first 20 lines for configuration
                 complete: (results) => {
-                    setCsvData(results.data as any[]);
+                    if (results.errors.length > 0) {
+                        setParseError("Failed to parse CSV file.");
+                        console.error(results.errors);
+                    } else {
+                        setRawRows(results.data as string[][]);
+                        setCurrentStep("MARKING");
+                    }
                 },
+                error: (error) => {
+                    setParseError(`Error parsing file: ${error.message}`);
+                }
             });
         }
     }, []);
 
-    const processedData = useMemo(() => {
-        if (csvData.length === 0) return [];
-        const dataAfterSkip = csvData.slice(skipHeaderLines);
-        if (dataAfterSkip.length === 0) return [];
+    const clearFile = () => {
+        setFile(null);
+        setRawRows([]);
+        setParseError(null);
+        setCurrentStep("UPLOAD");
+        // Reset markings
+        setIgnoredRowIndices(new Set());
+        setHeaderRowIndex(null);
+        setDataStartRowIndex(null);
+    };
 
-        const currentHeaders = dataAfterSkip[0] as string[];
-        setHeaders(currentHeaders);
+    // ----------------------------------------------------------------------
+    // STEP 2: MARKING LOGIC
+    // ----------------------------------------------------------------------
+    const toggleIgnoreRow = (index: number) => {
+        const newSet = new Set(ignoredRowIndices);
+        if (newSet.has(index)) {
+            newSet.delete(index);
+        } else {
+            newSet.add(index);
+            // If we ignore a row, it can't be header or data start
+            if (headerRowIndex === index) setHeaderRowIndex(null);
+            if (dataStartRowIndex === index) setDataStartRowIndex(null);
+        }
+        setIgnoredRowIndices(newSet);
+    };
 
-        return dataAfterSkip.slice(1).map((row: any[]) => {
-            const obj: any = {};
-            currentHeaders.forEach((header, index) => {
-                obj[header] = row[index];
-            });
-            return obj;
+    const setHeaderRow = (index: number) => {
+        if (ignoredRowIndices.has(index)) return;
+        setHeaderRowIndex(index === headerRowIndex ? null : index);
+        // Header can't be data start
+        if (dataStartRowIndex === index) setDataStartRowIndex(null);
+    };
+
+    const setDataStartRow = (index: number) => {
+        if (ignoredRowIndices.has(index)) return;
+        setDataStartRowIndex(index === dataStartRowIndex ? null : index);
+        // Data start can't be header
+        if (headerRowIndex === index) setHeaderRowIndex(null);
+    };
+
+    const getRowClass = (index: number) => {
+        if (ignoredRowIndices.has(index)) return "bg-red-500/10 hover:bg-red-500/20";
+        if (headerRowIndex === index) return "bg-blue-500/10 hover:bg-blue-500/20";
+        if (dataStartRowIndex === index) return "bg-emerald-500/10 hover:bg-emerald-500/20";
+        // If data start is set and this index is after it, highlight as data
+        if (dataStartRowIndex !== null && index > dataStartRowIndex) return "bg-emerald-500/5 hover:bg-emerald-500/10";
+        return "hover:bg-zinc-800/50";
+    };
+
+    const canProceedToMapping = selectedAccountId && headerRowIndex !== null && dataStartRowIndex !== null;
+
+    // ----------------------------------------------------------------------
+    // STEP 3: MAPPING LOGIC
+    // ----------------------------------------------------------------------
+    const headers = useMemo(() => {
+        if (headerRowIndex === null) return [];
+        return rawRows[headerRowIndex] || [];
+    }, [rawRows, headerRowIndex]);
+
+    const previewMappedData = useMemo(() => {
+        if (headerRowIndex === null || dataStartRowIndex === null) return [];
+
+        // Simulating extraction based on markings
+        return rawRows.slice(dataStartRowIndex).filter((_, idx) => !ignoredRowIndices.has(dataStartRowIndex + idx)).map(row => {
+            const dateIdx = headers.indexOf(mapping.date);
+            const descIdx = headers.indexOf(mapping.description);
+            const amountIdx = headers.indexOf(mapping.amount);
+
+            return {
+                date: row[dateIdx] || "—",
+                description: row[descIdx] || "—",
+                amount: row[amountIdx] || "—"
+            };
         });
-    }, [csvData, skipHeaderLines]);
-
-    const previewData = useMemo(() => {
-        return processedData.slice(0, 5).map((row) => ({
-            date: row[mapping.date] || "—",
-            description: row[mapping.description] || "—",
-            amount: row[mapping.amount] || "—",
-        }));
-    }, [processedData, mapping]);
+    }, [rawRows, headerRowIndex, dataStartRowIndex, ignoredRowIndices, mapping, headers]);
 
     const handleSave = async () => {
         if (!selectedAccountId || !mapping.date || !mapping.description || !mapping.amount) {
-            alert("Please select an account and map all required fields.");
             return;
         }
 
@@ -74,261 +159,296 @@ export default function PatternBuilder({ accounts }: PatternBuilderProps) {
             await createExtractionPattern({
                 accountId: selectedAccountId,
                 config: {
-                    skipHeaderLines,
-                    columnMapping: mapping,
+                    headerRowIndex,
+                    dataStartRowIndex,
+                    ignoredRowIndices: Array.from(ignoredRowIndices),
+                    columnMapping: {
+                        date: mapping.date, // Store column name, logic will match by name
+                        description: mapping.description,
+                        amount: mapping.amount
+                    },
                 },
             });
-            router.push(`/`); // Push to dashboard
+            router.push(`/`);
         } catch (error) {
             console.error("Failed to save pattern:", error);
-            alert("Failed to save pattern. Please try again.");
+            alert("Failed to save pattern.");
         } finally {
             setIsSaving(false);
         }
     };
 
-    return (
-        <div className="space-y-8">
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="grid grid-cols-1 lg:grid-cols-12 gap-8"
-            >
-                {/* Configuration Section */}
-                <motion.div
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.1 }}
-                    className="lg:col-span-5"
+    // ----------------------------------------------------------------------
+    // UI RENDERERS
+    // ----------------------------------------------------------------------
+
+    const renderUploadStep = () => (
+        <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="space-y-6"
+        >
+            <div className="space-y-2">
+                <Label>Target Account</Label>
+                <Select
+                    value={selectedAccountId}
+                    onChange={(e) => setSelectedAccountId(e.target.value)}
+                    className="bg-zinc-800/50 border-zinc-700"
                 >
-                    <Card className="p-6 space-y-8 bg-zinc-900/50 backdrop-blur-xl border-zinc-800">
-                        <div className="space-y-6">
-                            <h2 className="text-xl font-semibold text-white flex items-center gap-3">
-                                <div className="p-2 rounded-lg bg-indigo-500/10">
-                                    <Upload className="w-5 h-5 text-indigo-400" />
-                                </div>
-                                1. Source Configuration
-                            </h2>
+                    <option value="">Select an account...</option>
+                    {accounts.map((account) => (
+                        <option key={account.id} value={account.id}>
+                            {account.bankName} - {account.name}
+                        </option>
+                    ))}
+                </Select>
+            </div>
 
-                            <div className="space-y-2">
-                                <Label>Target Account</Label>
-                                <Select
-                                    value={selectedAccountId}
-                                    onChange={(e) => setSelectedAccountId(e.target.value)}
-                                    className="bg-zinc-800/50 border-zinc-700"
-                                >
-                                    <option value="">Select an account...</option>
-                                    {accounts.map((account) => (
-                                        <option key={account.id} value={account.id}>
-                                            {account.bankName} - {account.name}
-                                        </option>
-                                    ))}
-                                </Select>
-                            </div>
+            <div className="relative group">
+                <input
+                    type="file"
+                    accept=".csv"
+                    onChange={onFileUpload}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                />
+                <div className={cn(
+                    "border-2 border-dashed rounded-2xl p-12 text-center transition-all duration-300 bg-zinc-900/50",
+                    parseError ? "border-red-500/50 bg-red-500/5" : "border-zinc-800 hover:border-indigo-500/50 hover:bg-zinc-800/50"
+                )}>
+                    <Upload className={cn("w-12 h-12 mx-auto mb-4", parseError ? "text-red-500" : "text-zinc-500")} />
+                    <p className="text-lg font-medium text-zinc-300">
+                        {parseError ? "Upload Failed" : "Drop CSV file here"}
+                    </p>
+                    <p className="text-sm text-zinc-500 mt-2">
+                        {parseError || "or click to browse"}
+                    </p>
+                </div>
+            </div>
+        </motion.div>
+    );
 
-                            <div className="space-y-2">
-                                <Label>Sample CSV File</Label>
-                                <div className="relative group">
-                                    <input
-                                        type="file"
-                                        accept=".csv"
-                                        onChange={onFileUpload}
-                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                                    />
-                                    <div className={cn(
-                                        "border-2 border-dashed rounded-2xl p-10 text-center transition-all duration-300 bg-zinc-800/10",
-                                        csvData.length > 0
-                                            ? "border-emerald-500/50 bg-emerald-500/5"
-                                            : "border-zinc-700 group-hover:border-indigo-500/50"
-                                    )}>
-                                        {csvData.length > 0 ? (
-                                            <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-3" />
-                                        ) : (
-                                            <Upload className="w-10 h-10 text-zinc-500 mx-auto mb-3 group-hover:text-indigo-400" />
-                                        )}
-                                        <p className={cn(
-                                            "text-sm font-medium",
-                                            csvData.length > 0 ? "text-emerald-400" : "text-zinc-400"
-                                        )}>
-                                            {csvData.length > 0 ? "CSV Data Loaded" : "Drop CSV here or click to browse"}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
+    const renderMarkingStep = () => (
+        <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="space-y-6"
+        >
+            <div className="flex items-center justify-between p-4 bg-zinc-900/50 rounded-xl border border-zinc-800">
+                <div className="flex items-center gap-3">
+                    <FileText className="w-5 h-5 text-indigo-400" />
+                    <span className="text-sm font-medium text-zinc-300">{file?.name}</span>
+                </div>
+                <Button variant="ghost" onClick={clearFile} className="text-zinc-500 hover:text-white">
+                    <X className="w-4 h-4 mr-2" />
+                    Change File
+                </Button>
+            </div>
 
-                            <div className="space-y-2">
-                                <Label>Header Lines to Skip</Label>
-                                <Input
-                                    type="number"
-                                    min="0"
-                                    value={skipHeaderLines}
-                                    onChange={(e) => setSkipHeaderLines(parseInt(e.target.value) || 0)}
-                                    className="bg-zinc-800/50 border-zinc-700 font-mono"
-                                />
-                                <p className="text-xs text-zinc-500 italic">Number of rows to ignore BEFORE the header row.</p>
-                            </div>
-                        </div>
+            <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 p-4 space-y-4">
+                <div className="flex gap-4 text-sm mb-4">
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-red-500" />
+                        <span className="text-zinc-400">Ignored Row</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-blue-500" />
+                        <span className="text-zinc-400">Header Row</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-emerald-500" />
+                        <span className="text-zinc-400">First Data Row</span>
+                    </div>
+                </div>
 
-                        <div className="space-y-6 pt-8 border-t border-zinc-800">
-                            <h2 className="text-xl font-semibold text-white flex items-center gap-3">
-                                <div className="p-2 rounded-lg bg-indigo-500/10">
-                                    <ArrowRight className="w-5 h-5 text-indigo-400" />
-                                </div>
-                                2. Column Mapping
-                            </h2>
-
-                            <div className="space-y-4">
-                                <div className="space-y-2">
-                                    <Label>Transaction Date</Label>
-                                    <Select
-                                        value={mapping.date}
-                                        onChange={(e) => setMapping({ ...mapping, date: e.target.value })}
-                                        disabled={headers.length === 0}
-                                        className="bg-zinc-800/50 border-zinc-700"
-                                    >
-                                        <option value="">Select column...</option>
-                                        {headers.map((h) => (
-                                            <option key={h} value={h}>{h}</option>
-                                        ))}
-                                    </Select>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label>Description</Label>
-                                    <Select
-                                        value={mapping.description}
-                                        onChange={(e) => setMapping({ ...mapping, description: e.target.value })}
-                                        disabled={headers.length === 0}
-                                        className="bg-zinc-800/50 border-zinc-700"
-                                    >
-                                        <option value="">Select column...</option>
-                                        {headers.map((h) => (
-                                            <option key={h} value={h}>{h}</option>
-                                        ))}
-                                    </Select>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label>Value / Amount</Label>
-                                    <Select
-                                        value={mapping.amount}
-                                        onChange={(e) => setMapping({ ...mapping, amount: e.target.value })}
-                                        disabled={headers.length === 0}
-                                        className="bg-zinc-800/50 border-zinc-700"
-                                    >
-                                        <option value="">Select column...</option>
-                                        {headers.map((h) => (
-                                            <option key={h} value={h}>{h}</option>
-                                        ))}
-                                    </Select>
-                                </div>
-                            </div>
-                        </div>
-                    </Card>
-                </motion.div>
-
-                {/* Preview Section */}
-                <motion.div
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.2 }}
-                    className="lg:col-span-7 flex flex-col gap-6"
-                >
-                    <Card className="p-6 flex-1 bg-zinc-900/50 backdrop-blur-xl border-zinc-800 flex flex-col">
-                        <h2 className="text-xl font-semibold text-white flex items-center gap-3 mb-8">
-                            <div className="p-2 rounded-lg bg-indigo-500/10">
-                                <TableIcon className="w-5 h-5 text-indigo-400" />
-                            </div>
-                            Live Preview
-                        </h2>
-
-                        <div className="flex-1 min-h-[400px]">
-                            <AnimatePresence mode="wait">
-                                {csvData.length > 0 ? (
-                                    <motion.div
-                                        key="table"
-                                        initial={{ opacity: 0, scale: 0.98 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        exit={{ opacity: 0, scale: 0.98 }}
-                                        className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/20"
-                                    >
-                                        <table className="w-full text-sm text-left">
-                                            <thead className="text-xs uppercase bg-white/5 text-zinc-400">
-                                                <tr>
-                                                    <th className="px-6 py-4 font-semibold">Date</th>
-                                                    <th className="px-6 py-4 font-semibold">Description</th>
-                                                    <th className="px-6 py-4 font-semibold">Amount</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-zinc-800 text-zinc-300">
-                                                {previewData.map((row, i) => (
-                                                    <motion.tr
-                                                        key={i}
-                                                        initial={{ opacity: 0, y: 10 }}
-                                                        animate={{ opacity: 1, y: 0 }}
-                                                        transition={{ delay: i * 0.05 }}
-                                                        className="hover:bg-white/5 transition-colors group"
-                                                    >
-                                                        <td className="px-6 py-4 whitespace-nowrap text-zinc-400 group-hover:text-white transition-colors">{row.date}</td>
-                                                        <td className="px-6 py-4 max-w-xs truncate group-hover:text-white transition-colors">{row.description}</td>
-                                                        <td className="px-6 py-4 font-mono text-indigo-400 font-medium">{row.amount}</td>
-                                                    </motion.tr>
-                                                ))}
-                                                {previewData.length === 0 && (
-                                                    <tr>
-                                                        <td colSpan={3} className="px-6 py-12 text-center text-zinc-500 italic">
-                                                            No data available. Adjust "Lines to Skip" or check CSV format.
-                                                        </td>
-                                                    </tr>
-                                                )}
-                                            </tbody>
-                                        </table>
-                                    </motion.div>
-                                ) : (
-                                    <motion.div
-                                        key="empty"
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        exit={{ opacity: 0 }}
-                                        className="flex flex-col items-center justify-center h-full text-zinc-500 border-2 border-dashed border-zinc-800 rounded-2xl bg-zinc-800/5"
-                                    >
-                                        <div className="relative mb-6">
-                                            <Upload className="w-16 h-16 opacity-10" />
-                                            <TableIcon className="w-8 h-8 absolute -bottom-2 -right-2 opacity-20 text-indigo-500" />
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm border-collapse">
+                        <tbody>
+                            {rawRows.map((row, rowIndex) => (
+                                <tr key={rowIndex} className={cn("transition-colors", getRowClass(rowIndex))}>
+                                    <td className="p-2 border-b border-zinc-800 w-[1%]" align="right">
+                                        <div className="flex gap-1">
+                                            <button
+                                                onClick={() => toggleIgnoreRow(rowIndex)}
+                                                className={cn("w-6 h-6 rounded flex items-center justify-center hover:bg-white/10", ignoredRowIndices.has(rowIndex) ? "text-red-500" : "text-zinc-600")}
+                                                title="Ignore Row"
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                            <button
+                                                onClick={() => setHeaderRow(rowIndex)}
+                                                className={cn("w-6 h-6 rounded flex items-center justify-center hover:bg-white/10", headerRowIndex === rowIndex ? "text-blue-500" : "text-zinc-600")}
+                                                title="Set as Header"
+                                            >
+                                                <TableIcon size={14} />
+                                            </button>
+                                            <button
+                                                onClick={() => setDataStartRow(rowIndex)}
+                                                className={cn("w-6 h-6 rounded flex items-center justify-center hover:bg-white/10", dataStartRowIndex === rowIndex ? "text-emerald-500" : "text-zinc-600")}
+                                                title="Set as First Data Row"
+                                            >
+                                                <ChevronRight size={14} />
+                                            </button>
                                         </div>
-                                        <p className="text-lg font-medium text-zinc-400">Ready to Map</p>
-                                        <p className="text-sm text-zinc-600 mt-1">Upload a sample CSV to start data extraction</p>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </div>
+                                    </td>
+                                    {row.slice(0, 5).map((cell, cellIndex) => (
+                                        <td key={cellIndex} className="p-3 border-b border-zinc-800 whitespace-nowrap text-zinc-300">
+                                            {cell}
+                                        </td>
+                                    ))}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
 
-                        {csvData.length > 0 && (
-                            <div className="mt-8 p-5 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 flex gap-4 items-start">
-                                <div className="p-2 rounded-full bg-indigo-500/10 text-indigo-400 mt-1">
-                                    <CheckCircle2 className="w-4 h-4" />
-                                </div>
-                                <p className="text-xs text-zinc-400 leading-relaxed">
-                                    <strong className="text-indigo-300 block mb-1">Previewing First 5 Mapped Rows</strong>
-                                    This table shows how your data will be extracted using the current mapping. Verify that the columns align correctly before saving.
-                                </p>
-                            </div>
-                        )}
-                    </Card>
+            <div className="flex justify-end pt-4">
+                <Button
+                    onClick={() => setCurrentStep("MAPPING")}
+                    disabled={!canProceedToMapping}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                >
+                    Continue to Mapping
+                    <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+            </div>
+        </motion.div>
+    );
 
-                    <Button
-                        onClick={handleSave}
-                        disabled={isSaving || !selectedAccountId || !mapping.date}
-                        className="w-full h-16 text-lg font-semibold shadow-2xl relative overflow-hidden group rounded-2xl"
+    const renderMappingStep = () => (
+        <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="space-y-8"
+        >
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="space-y-2">
+                    <Label>Transaction Date</Label>
+                    <Select
+                        value={mapping.date}
+                        onChange={(e) => setMapping({ ...mapping, date: e.target.value })}
+                        className="bg-zinc-800/50 border-zinc-700"
                     >
-                        <span className="relative z-10 flex items-center justify-center gap-3">
-                            {isSaving ? "Creating Extraction Pattern..." : "Save Extraction Pattern"}
-                            {!isSaving && <Save className="w-6 h-6 group-hover:rotate-12 transition-transform" />}
-                        </span>
-                        <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 to-violet-600 opacity-90 group-hover:opacity-100 transition-opacity" />
-                    </Button>
-                </motion.div>
-            </motion.div>
-        </div>
+                        <option value="">Select column...</option>
+                        {headers.map((h, i) => (
+                            <option key={i} value={h}>{h}</option>
+                        ))}
+                    </Select>
+                </div>
+                <div className="space-y-2">
+                    <Label>Description</Label>
+                    <Select
+                        value={mapping.description}
+                        onChange={(e) => setMapping({ ...mapping, description: e.target.value })}
+                        className="bg-zinc-800/50 border-zinc-700"
+                    >
+                        <option value="">Select column...</option>
+                        {headers.map((h, i) => (
+                            <option key={i} value={h}>{h}</option>
+                        ))}
+                    </Select>
+                </div>
+                <div className="space-y-2">
+                    <Label>Amount</Label>
+                    <Select
+                        value={mapping.amount}
+                        onChange={(e) => setMapping({ ...mapping, amount: e.target.value })}
+                        className="bg-zinc-800/50 border-zinc-700"
+                    >
+                        <option value="">Select column...</option>
+                        {headers.map((h, i) => (
+                            <option key={i} value={h}>{h}</option>
+                        ))}
+                    </Select>
+                </div>
+            </div>
+
+            <Card className="p-0 overflow-hidden bg-zinc-900/50 border-zinc-800">
+                <div className="p-4 border-b border-zinc-800 bg-zinc-900">
+                    <h3 className="text-sm font-medium text-zinc-400">Verification Preview (First 5 Rows)</h3>
+                </div>
+                <table className="w-full text-sm text-left">
+                    <thead className="bg-zinc-900/50 text-zinc-500">
+                        <tr>
+                            <th className="px-6 py-3">Date</th>
+                            <th className="px-6 py-3">Description</th>
+                            <th className="px-6 py-3">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-800">
+                        {previewMappedData.slice(0, 5).map((row, i) => (
+                            <tr key={i} className="hover:bg-white/5">
+                                <td className="px-6 py-3 text-zinc-300">{row.date}</td>
+                                <td className="px-6 py-3 text-zinc-300">{row.description}</td>
+                                <td className="px-6 py-3 font-mono text-indigo-400">{row.amount}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </Card>
+
+            <div className="flex justify-between pt-4">
+                <Button
+                    variant="secondary"
+                    onClick={() => setCurrentStep("MARKING")}
+                    className="border-zinc-700 hover:bg-zinc-800 text-zinc-300"
+                >
+                    Back
+                </Button>
+                <Button
+                    onClick={handleSave}
+                    disabled={isSaving || !mapping.date || !mapping.description || !mapping.amount}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white min-w-[150px]"
+                >
+                    {isSaving ? "Saving..." : "Save Pattern"}
+                    {!isSaving && <CheckCircle2 className="w-4 h-4 ml-2" />}
+                </Button>
+            </div>
+        </motion.div>
+    );
+
+    return (
+        <Card className="p-6 md:p-8 bg-zinc-950 border border-zinc-900 shadow-2xl space-y-8 max-w-5xl mx-auto">
+            {/* Wizard Steps */}
+            <div className="flex items-center justify-between max-w-2xl mx-auto mb-12 relative">
+                <div className="absolute left-0 top-1/2 w-full h-0.5 bg-zinc-900 -z-10" />
+                {(["UPLOAD", "MARKING", "MAPPING"] as Step[]).map((step, index) => {
+                    const isActive = step === currentStep;
+                    const isCompleted =
+                        (step === "UPLOAD" && currentStep !== "UPLOAD") ||
+                        (step === "MARKING" && currentStep === "MAPPING");
+
+                    return (
+                        <div key={step} className="flex flex-col items-center gap-3 bg-zinc-950 px-4">
+                            <div className={cn(
+                                "w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all duration-300",
+                                isActive ? "border-indigo-500 text-indigo-400 bg-indigo-500/10" :
+                                    isCompleted ? "border-emerald-500 text-emerald-500 bg-emerald-500/10" :
+                                        "border-zinc-800 text-zinc-600 bg-zinc-900"
+                            )}>
+                                {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : index + 1}
+                            </div>
+                            <span className={cn(
+                                "text-xs font-semibold tracking-wider transition-colors duration-300",
+                                isActive ? "text-indigo-400" :
+                                    isCompleted ? "text-emerald-500" :
+                                        "text-zinc-600"
+                            )}>
+                                {step}
+                            </span>
+                        </div>
+                    );
+                })}
+            </div>
+
+            <AnimatePresence mode="wait">
+                {currentStep === "UPLOAD" && renderUploadStep()}
+                {currentStep === "MARKING" && renderMarkingStep()}
+                {currentStep === "MAPPING" && renderMappingStep()}
+            </AnimatePresence>
+        </Card>
     );
 }
